@@ -212,7 +212,7 @@ export function defineReactive (
       }
       // 如果有子对象，且不是浅比较的，则对这个新的对象处理成observer
       childOb = !shallow && observe(newVal)
-      // 对订阅这个dep的观察者进行通知
+      // 对订阅这个dep的观察者watcher进行通知
       dep.notify()
     }
   })
