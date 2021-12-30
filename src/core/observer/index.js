@@ -41,17 +41,23 @@ export class Observer {
 
   constructor (value: any) {
     this.value = value
+    // 创建dep对象
     this.dep = new Dep()
+    // 计数
     this.vmCount = 0
+    // 设置一个 __ob__ 属性，指向自己
     def(value, '__ob__', this)
+    // 给array的prototype注入vue修改过的方法，用于进行响应式处理
     if (Array.isArray(value)) {
       if (hasProto) {
         protoAugment(value, arrayMethods)
       } else {
         copyAugment(value, arrayMethods, arrayKeys)
       }
+      // 对数组的每一项进行响应式处理
       this.observeArray(value)
     } else {
+      // 对对象进行响应式处理
       this.walk(value)
     }
   }
@@ -108,13 +114,16 @@ function copyAugment (target: Object, src: Object, keys: Array<string>) {
  * or the existing observer if the value already has one.
  */
 export function observe (value: any, asRootData: ?boolean): Observer | void {
+  // 判断是否是对象，如果不是，直接返回。或者如果是vnode，直接返回
   if (!isObject(value) || value instanceof VNode) {
     return
   }
   let ob: Observer | void
+  // 判断对象上是否有 __ob__这个属性，如果有说明已经是reative对象
   if (hasOwn(value, '__ob__') && value.__ob__ instanceof Observer) {
     ob = value.__ob__
   } else if (
+    // 一堆判断条件，是否要开启observe，是否不是服务端渲染，判断是否是数组，是否是原生对象，是否是自定义对象，是否是空对象
     shouldObserve &&
     !isServerRendering() &&
     (Array.isArray(value) || isPlainObject(value)) &&
@@ -131,6 +140,7 @@ export function observe (value: any, asRootData: ?boolean): Observer | void {
 
 /**
  * Define a reactive property on an Object.
+ * 在一个对象上定义一个响应式属性，用了**闭包**
  */
 export function defineReactive (
   obj: Object,
@@ -139,28 +149,39 @@ export function defineReactive (
   customSetter?: ?Function,
   shallow?: boolean
 ) {
+  // 创建一个dep对象，用了闭包
   const dep = new Dep()
 
   const property = Object.getOwnPropertyDescriptor(obj, key)
+  // 如果属性不能更改，直接返回
   if (property && property.configurable === false) {
     return
   }
 
   // cater for pre-defined getter/setters
+  // 获取之前存在的getter/setter
   const getter = property && property.get
   const setter = property && property.set
+  // 如果初始化的时候，获取val
   if ((!getter || setter) && arguments.length === 2) {
     val = obj[key]
   }
-
+  // 如果不是shallow，则对值(如果值又是一个对象)进行递归处理
   let childOb = !shallow && observe(val)
+  // 修改对象的key值，使用defineProperty方法
   Object.defineProperty(obj, key, {
+    // 可以枚举
     enumerable: true,
+    // 可以修改
     configurable: true,
     get: function reactiveGetter () {
+      // 获取当前的值，如果有getter，调用getter
       const value = getter ? getter.call(obj) : val
+      // 被收集依赖
       if (Dep.target) {
+        // 把当前属性，上面的dep对象，假如到watcher中
         dep.depend()
+        // 如果有子对象，进行收集
         if (childOb) {
           childOb.dep.depend()
           if (Array.isArray(value)) {
@@ -168,9 +189,11 @@ export function defineReactive (
           }
         }
       }
+      // 返回值
       return value
     },
     set: function reactiveSetter (newVal) {
+      // 先获取一下当前的值，再进行比较，如果一样则返回，不进行处理，这个比较只是一个浅比较
       const value = getter ? getter.call(obj) : val
       /* eslint-disable no-self-compare */
       if (newVal === value || (newVal !== newVal && value !== value)) {
@@ -187,7 +210,9 @@ export function defineReactive (
       } else {
         val = newVal
       }
+      // 如果有子对象，且不是浅比较的，则对这个新的对象处理成observer
       childOb = !shallow && observe(newVal)
+      // 对订阅这个dep的观察者进行通知
       dep.notify()
     }
   })

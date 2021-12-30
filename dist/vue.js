@@ -46,7 +46,7 @@
 
   /**
    * Quick object check - this is primarily used to tell
-   * Objects from primitive values when we know the value
+   * objects from primitive values when we know the value
    * is a JSON-compliant type.
    */
   function isObject (obj) {
@@ -709,12 +709,16 @@
 
   var uid = 0;
 
+  // Dep 和 Watcher 是多对多的关系
   /**
    * A dep is an observable that can have multiple
    * directives subscribing to it.
+   * 一个 dep 是一个可以有多个指令订阅它的可观察对象。
    */
   var Dep = function Dep () {
+    // 生成唯一的 id
     this.id = uid++;
+    // 初始化订阅列表
     this.subs = [];
   };
 
@@ -728,12 +732,14 @@
 
   Dep.prototype.depend = function depend () {
     if (Dep.target) {
+      // 把Dep加入到watcher里
       Dep.target.addDep(this);
     }
   };
 
   Dep.prototype.notify = function notify () {
     // stabilize the subscriber list first
+    // 确定订阅者列表，复制一份，保持稳定
     var subs = this.subs.slice();
     if (!config.async) {
       // subs aren't sorted in scheduler if not running async
@@ -742,6 +748,7 @@
       subs.sort(function (a, b) { return a.id - b.id; });
     }
     for (var i = 0, l = subs.length; i < l; i++) {
+      // 通知触发 watcher 的更新
       subs[i].update();
     }
   };
@@ -750,6 +757,7 @@
   // This is globally unique because only one watcher
   // can be evaluated at a time.
   Dep.target = null;
+  // target的堆栈
   var targetStack = [];
 
   function pushTarget (target) {
@@ -921,17 +929,23 @@
    */
   var Observer = function Observer (value) {
     this.value = value;
+    // 创建dep对象
     this.dep = new Dep();
+    // 计数
     this.vmCount = 0;
+    // 设置一个 __ob__ 属性，指向自己
     def(value, '__ob__', this);
+    // 给array的prototype注入vue修改过的方法，用于进行响应式处理
     if (Array.isArray(value)) {
       if (hasProto) {
         protoAugment(value, arrayMethods);
       } else {
         copyAugment(value, arrayMethods, arrayKeys);
       }
+      // 对数组的每一项进行响应式处理
       this.observeArray(value);
     } else {
+      // 对对象进行响应式处理
       this.walk(value);
     }
   };
@@ -987,13 +1001,16 @@
    * or the existing observer if the value already has one.
    */
   function observe (value, asRootData) {
+    // 判断是否是对象，如果不是，直接返回。或者如果是vnode，直接返回
     if (!isObject(value) || value instanceof VNode) {
       return
     }
     var ob;
+    // 判断对象上是否有 __ob__这个属性，如果有说明已经是reative对象
     if (hasOwn(value, '__ob__') && value.__ob__ instanceof Observer) {
       ob = value.__ob__;
     } else if (
+      // 一堆判断条件，是否要开启observe，是否不是服务端渲染，判断是否是数组，是否是原生对象，是否是自定义对象，是否是空对象
       shouldObserve &&
       !isServerRendering() &&
       (Array.isArray(value) || isPlainObject(value)) &&
@@ -1010,6 +1027,7 @@
 
   /**
    * Define a reactive property on an Object.
+   * 在一个对象上定义一个响应式属性，用了**闭包**
    */
   function defineReactive$$1 (
     obj,
@@ -1018,28 +1036,39 @@
     customSetter,
     shallow
   ) {
+    // 创建一个dep对象，用了闭包
     var dep = new Dep();
 
     var property = Object.getOwnPropertyDescriptor(obj, key);
+    // 如果属性不能更改，直接返回
     if (property && property.configurable === false) {
       return
     }
 
     // cater for pre-defined getter/setters
+    // 获取之前存在的getter/setter
     var getter = property && property.get;
     var setter = property && property.set;
+    // 如果初始化的时候，获取val
     if ((!getter || setter) && arguments.length === 2) {
       val = obj[key];
     }
-
+    // 如果不是shallow，则对值(如果值又是一个对象)进行递归处理
     var childOb = !shallow && observe(val);
+    // 修改对象的key值，使用defineProperty方法
     Object.defineProperty(obj, key, {
+      // 可以枚举
       enumerable: true,
+      // 可以修改
       configurable: true,
       get: function reactiveGetter () {
+        // 获取当前的值，如果有getter，调用getter
         var value = getter ? getter.call(obj) : val;
+        // 被收集依赖
         if (Dep.target) {
+          // 把当前属性，上面的dep对象，假如到watcher中
           dep.depend();
+          // 如果有子对象，进行收集
           if (childOb) {
             childOb.dep.depend();
             if (Array.isArray(value)) {
@@ -1047,9 +1076,11 @@
             }
           }
         }
+        // 返回值
         return value
       },
       set: function reactiveSetter (newVal) {
+        // 先获取一下当前的值，再进行比较，如果一样则返回，不进行处理，这个比较只是一个浅比较
         var value = getter ? getter.call(obj) : val;
         /* eslint-disable no-self-compare */
         if (newVal === value || (newVal !== newVal && value !== value)) {
@@ -1066,7 +1097,9 @@
         } else {
           val = newVal;
         }
+        // 如果有子对象，且不是浅比较的，则对这个新的对象处理成observer
         childOb = !shallow && observe(newVal);
+        // 对订阅这个dep的观察者进行通知
         dep.notify();
       }
     });
@@ -7620,7 +7653,9 @@
     }
     var on = vnode.data.on || {};
     var oldOn = oldVnode.data.on || {};
-    target$1 = vnode.elm;
+    // vnode is empty when removing all listeners,
+    // and use old vnode dom element
+    target$1 = vnode.elm || oldVnode.elm;
     normalizeEvents(on);
     updateListeners(on, oldOn, add$1, remove$2, createOnceHandler$1, vnode.context);
     target$1 = undefined;
@@ -7628,7 +7663,8 @@
 
   var events = {
     create: updateDOMListeners,
-    update: updateDOMListeners
+    update: updateDOMListeners,
+    destroy: function (vnode) { return updateDOMListeners(vnode, emptyNode); }
   };
 
   /*  */
@@ -9180,7 +9216,7 @@
       }
     }
     if (staticClass) {
-      el.staticClass = JSON.stringify(staticClass);
+      el.staticClass = JSON.stringify(staticClass.replace(/\s+/g, ' ').trim());
     }
     var classBinding = getBindingAttr(el, 'class', false /* getStatic */);
     if (classBinding) {
